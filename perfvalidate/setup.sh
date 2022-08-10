@@ -8,6 +8,8 @@ RGNAME=$PREFIX-rg
 VNETNAME=$PREFIX-vnet
 FDNAME=$PREFIX-fd
 
+az account set -s $SUBSCRIPTION_ID
+
 # create resource group
 az group create --name $RGNAME --location $LOCATION
 
@@ -34,7 +36,8 @@ az afd origin-group create --origin-group-name storage --probe-path "/" --probe-
                            --probe-request-type HEAD \
                            --profile-name $FDNAME \
                            --resource-group $RGNAME \
-                           --sample-size 1 --successful-samples-required 1 --additional-latency-in-ms 10
+                           --sample-size 1 --successful-samples-required 1 \
+                           --additional-latency-in-milliseconds 10
 
 az afd origin create --enabled-state Enabled --host-name $PREFIX"static.blob.core.windows.net" \
                      --origin-group-name storage \
