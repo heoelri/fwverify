@@ -30,18 +30,65 @@ az vm create --name $PREFIX"client" --resource-group $RGNAME \
              --os-type "linux" --subnet $CLIENTSUBNET --public-ip-address "" --image Debian
 
 # create front door
-az afd profile create --profile-name $FDNAME --resource-group $RGNAME --sku Premium_AzureFrontDoor
-az afd endpoint create --endpoint-name $FDNAME --profile-name $FDNAME --resource-group $RGNAME --enabled-state Enabled
-az afd origin-group create --origin-group-name storage --probe-path "/" --probe-protocol Https \
+az afd profile create --profile-name $FDNAME \
+                      --resource-group $RGNAME \
+                      --sku Premium_AzureFrontDoor
+
+# Expose Storage Account via Front Door (without Private Link)
+az afd endpoint create --endpoint-name $FDNAME"-stor" \
+                       --profile-name $FDNAME \
+                       --resource-group $RGNAME \
+                       --enabled-state Enabled
+
+az afd origin-group create --origin-group-name storage \
+                           --probe-path "/" \
+                           --probe-protocol Https \
                            --probe-request-type HEAD \
                            --profile-name $FDNAME \
                            --resource-group $RGNAME \
-                           --sample-size 1 --successful-samples-required 1 \
+                           --sample-size 1 \
+                           --successful-samples-required 1 \
                            --additional-latency-in-milliseconds 10
 
-az afd origin create --enabled-state Enabled --host-name $PREFIX"static.blob.core.windows.net" \
+az afd origin create --enabled-state Enabled \
+                     --host-name $PREFIX"static.blob.core.windows.net" \
+                     --origin-host-header $PREFIX"static.blob.core.windows.net" \
                      --origin-group-name storage \
                      --origin-name storage \
+                     --profile-name $FDNAME \
+                     --resource-group $RGNAME
+
+az afd route create --endpoint-name $FDNAME"-stor" \
+                    --forwarding-protocol HttpsOnly \
+                    --https-redirect Enabled \
+                    --origin-group "storage" \
+                    --link-to-default-domain Enabled \
+                    --profile-name $FDNAME \
+                    --resource-group $RGNAME \
+                    --route-name $FDNAME \
+                    --supported-protocols Https
+
+# Expose Storage Account via Front Door with Private Link
+az afd endpoint create --endpoint-name $FDNAME"-stor-pl" \
+                       --profile-name $FDNAME \
+                       --resource-group $RGNAME \
+                       --enabled-state Enabled
+
+az afd origin-group create --origin-group-name "storage-with-pl" \
+                           --probe-path "/" \
+                           --probe-protocol Https \
+                           --probe-request-type HEAD \
+                           --profile-name $FDNAME \
+                           --resource-group $RGNAME \
+                           --sample-size 1 \
+                           --successful-samples-required 1 \
+                           --additional-latency-in-milliseconds 10
+
+az afd origin create --enabled-state Enabled \
+                     --host-name $PREFIX"static.blob.core.windows.net" \
+                     --origin-host-header $PREFIX"static.blob.core.windows.net" \
+                     --origin-group-name "storage-with-pl" \
+                     --origin-name storage-with-pl \
                      --profile-name $FDNAME \
                      --resource-group $RGNAME \
                      --enable-private-link true \
@@ -50,7 +97,10 @@ az afd origin create --enabled-state Enabled --host-name $PREFIX"static.blob.cor
                      --private-link-sub-resource-type blob \
                      --private-link-request-message "access"
 
-az afd route create --endpoint-name $FDNAME --forwarding-protocol HttpsOnly --https-redirect Enabled --origin-group storage \
+az afd route create --endpoint-name $FDNAME"-stor-pl" \
+                    --forwarding-protocol HttpsOnly \
+                    --https-redirect Enabled \
+                    --origin-group "storage-with-pl" \
                     --link-to-default-domain Enabled \
                     --profile-name $FDNAME \
                     --resource-group $RGNAME \
